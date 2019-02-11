@@ -7,11 +7,14 @@
 
 #include "rays.h"
 
+class material;
+
 struct hit_record
 {
 	float t;//击中时的t值
 	vec3 p;//击中点的光线
 	vec3 normal;//击中点的表面法线（归一化后）
+	material *mat_ptr;
 };
 
 class hitable

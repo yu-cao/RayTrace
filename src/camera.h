@@ -21,6 +21,7 @@ public:
 		return ray(origin, lower_left_corner + u * horizontal + v * vertical - origin);
 	}
 
+private:
 	vec3 origin;
 	vec3 lower_left_corner;
 	vec3 horizontal;

@@ -4,12 +4,21 @@
 #include "hitable_list.h"
 #include "sphere.h"
 #include "camera.h"
+#include "material.h"
 
-vec3 color(const ray &r, hitable *world)
+//depth：进行多少次光线追踪
+vec3 color(const ray &r, hitable *world, int depth)
 {
 	hit_record rec;
-	if (world->hit(r, 0.0, MAXFLOAT, rec))//确认是否在这个像素点上有光线跟任意球体碰撞
-		return 0.5 * vec3(rec.normal.x() + 1, rec.normal.y() + 1, rec.normal.z() + 1);//表面法线[-1,1]->[0,1]化
+	if (world->hit(r, 0.001, MAXFLOAT, rec))
+	{
+		ray scattered;//散射光线
+		vec3 attenuation;//反射率
+		if (depth < 50 && rec.mat_ptr->scatter(r,rec,attenuation,scattered))//调用两个派生类进行分别的渲染
+			return attenuation * color(scattered, world, depth + 1);
+		else
+			return vec3(0,0,0);
+	}
 	else
 	{
 		vec3 unit_direction = unit_vector(r.direction());//归一化成单位坐标
@@ -28,12 +37,15 @@ int main()
 	std::cout << "P3\n" << nx << " " << ny << "\n255\n";
 
 	//创建两个球体，list[i]这个指针从基类hitable指向派生类sphere
-	hitable *list[2];
-	list[0] = new sphere(vec3(0, 0, -1), 0.5);//原点(0,0,-1)，半径为0.5
-	list[1] = new sphere(vec3(0, -100.5, -1), 100);//原点(0,-100,-1)，半径为100.5
+	hitable *list[5];
+	list[0] = new sphere(vec3(0, 0, -1), 0.5, new lambertian(vec3(0.1, 0.2, 0.5)));//原点(0,0,-1)，半径为0.5，漫反射材质
+	list[1] = new sphere(vec3(0, -100.5, -1), 100, new lambertian(vec3(0.8, 0.8, 0.0)));
+	list[2] = new sphere(vec3(1, 0, -1), 0.5, new metal(vec3(0.8, 0.6, 0.2),0.0));//原点(1,0,-1)，半径为0.5，镜面反射材质，模糊度0
+	list[3] = new sphere(vec3(-1, 0, -1), 0.5, new dielectric(1.5));
+	list[4] = new sphere(vec3(-1, 0, -1), -0.45, new dielectric(1.5));
 
 	//创建一个list，可以对整个球体的list进行逐一检查
-	hitable *world = new hitable_list(list, 2);
+	hitable *world = new hitable_list(list, 5);
 
 	//建立一个照相机
 	camera cam;
@@ -50,7 +62,7 @@ int main()
 				float v = float(j + drand48()) / float(ny);
 				ray r = cam.get_ray(u, v);
 				vec3 p = r.point_at_parameter(2.0);
-				col += color(r, world);
+				col += color(r, world, 0);
 			}
 			col /= float(ns);
 

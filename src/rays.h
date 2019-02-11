@@ -27,6 +27,7 @@ public:
 	vec3 point_at_parameter(float t) const
 	{ return A + t * B; }
 
+private:
 	vec3 A;//光源
 	vec3 B;//朝向
 };
