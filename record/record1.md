@@ -605,3 +605,146 @@ private:
 	//创建一个list，可以对整个球体的list进行逐一检查
 	hitable *world = new hitable_list(list, 5);
 ```
+
+<hr>
+
+相机
+
+相机也是非常难以进行debug的一个地方。首先，我们需要一个能改变视野观察范围(field of view, fov)的变量，同时为了能够最终在屏幕前显示，坐标要变换成观察坐标系，为此，加入了vup恒为(0,1,0)，这帮助我们很好地通过相机位置与被观察点构建出一个以相机为坐标原点的观察坐标系。其中，u指向屏幕右侧，v指向屏幕上侧，w是被观察点指向相机的向量，这三者相互垂直
+
+下面，我们重构了camera的构造函数，引入这些变量用来构建相机坐标系
+
+```cpp
+class camera{
+public:
+	//vfov：视野域，也就是视野的角度；aspect：屏幕width与height之比
+	camera(vec3 lookfrom, vec3 lookat, const vec3 vup, const float vfov, const float aspect)
+	{
+		float theta = vfov * M_PI / 180.0;//弧度制
+		float half_height = tan(theta / 2.0);//观察视野一半的高度
+		float half_width = aspect * half_height;//通过屏幕的长宽比算出宽度
+
+		origin = lookfrom;
+
+		//建立以相机坐标为原点的一组正交基，现在以相机是坐标原点（投影变换）
+		w = unit_vector(lookfrom - lookat);//从被观察点指向相机
+		u = unit_vector(cross(vup, w));//vup为x轴，w为y轴进行右手定则得到u的方向（也就是相机画面里向右延展的方向）
+		v = cross(w, u);//以w为x轴，u为y轴进行右手定则得到v的方向（两个单位向量叉乘还是单位向量）（也就是相机画面里向上延展的方向）
+
+		//lower_left_corner = vec3(-half_width, -half_height, -1.0);
+		lower_left_corner = origin - half_width * u - half_height * v - w;//找到当前画面中最左下角的点在世界坐标系下的位置
+		horizontal = 2 * half_width * u;//得到向右的屏幕全长矢量
+		vertical = 2 * half_height * v;//得到向上的屏幕全长矢量
+	}
+
+	ray get_ray(float s, float t)//光线从光源点射向被观察点的光线
+	{
+		return ray(origin, lower_left_corner + s * horizontal + t * vertical - origin);
+	}
+
+private:
+	vec3 origin;//光线原点
+	vec3 lower_left_corner;//画面左下角
+	vec3 horizontal;//画面水平矢量
+	vec3 vertical;//画面垂直矢量
+	vec3 u, v, w;//一组相机空间的正交基
+};
+```
+
+修改main.cpp的相机内容
+
+```cpp
+	vec3 lookfrom(12,2,3);
+	vec3 lookat(0,0,0);
+	const vec3 vup(0,1,0);
+	const float fov = 20.0;
+	camera cam(lookfrom, lookat, vup, fov, float(nx) / float(ny));
+```
+
+运行观察结果
+
+<hr>
+
+焦散模糊（defocus blur）
+
+因为所有的相机都有景深这个概念，而任何没有对焦好的东西都会出现焦散模糊的现象，我们要模拟这个模糊
+
+我们要再在相机上加入焦距和光圈（透镜直径）这两个变量，现实的光圈控制进光量，越大的光圈进光量越大，焦散模糊也就越大，但是我们的虚拟相机是一个完美的sensor，不需要更多的light，所以`aperture`这个参数对于我们来说就可以控制defocus blur
+
+```cpp
+camera(vec3 lookfrom, vec3 lookat, const vec3 vup, const float vfov, const float aspect, float aperture, float focus_dist)
+```
+
+引入`private`变量：`lens_radius`，用来模拟相机的透镜半径` = aperture / 2;`
+
+重写`lower_left_corner`，`horizontal`和`vertical`，因为焦距的引入，这些东西都需要额外再长度上乘以一个focus_dist
+
+```cpp
+lower_left_corner = origin - half_width * focus_dist * u - half_height * focus_dist * v - focus_dist * w;
+horizontal = 2 * half_width * focus_dist * u;//计算width的全长矢量（要额外加入焦距变量）
+vertical = 2 * half_height * focus_dist * v;
+```
+
+我们要重写从光源到被观察点的光线`get_ray`函数，让光源不再永远是从一个点上发射的，而是以`lookfrom`坐标为圆心的一个单位圆上发射（模拟的是从透镜的表面发射光线）：
+
+```cpp
+vec3 random_in_unit_disk(){
+	vec3 p;
+	do
+	{
+		p = 2.0 * vec3(drand48(), drand48(), 0) - vec3(1, 1, 0);
+	} while (dot(p, p) >= 1.0);
+	return p;
+}
+
+//光线从光源点射向被观察点的光线，光源以lookfrom为圆心的一个单位圆上发射
+ray get_ray(float s, float t)
+{
+	vec3 rd = lens_radius * random_in_unit_disk();
+	vec3 offset = u * rd.x() + v * rd.y();
+	return ray(origin + offset, lower_left_corner + s * horizontal + t * vertical - origin - offset);
+}
+```
+
+我们将使用一个薄薄的lens作为近似，而不是学习像真实相机那样额外需要一个成像平面
+
+<hr>
+
+最后，我们将场景中球随机摆放，在main中调用即可
+
+```cpp
+hitable *random_scene() {
+    int n = 500;
+    hitable **list = new hitable*[n+1];
+    list[0] =  new sphere(vec3(0,-1000,0), 1000, new lambertian(vec3(0.5, 0.5, 0.5)));
+    int i = 1;
+    for (int a = -11; a < 11; a++) {
+        for (int b = -11; b < 11; b++) {
+            float choose_mat = drand48();
+            vec3 center(a+0.9*drand48(),0.2,b+0.9*drand48()); 
+            if ((center-vec3(4,0.2,0)).length() > 0.9) { 
+                if (choose_mat < 0.8) {  // diffuse
+                    list[i++] = new sphere(center, 0.2, new lambertian(vec3(drand48()*drand48(), drand48()*drand48(), drand48()*drand48())));
+                }
+                else if (choose_mat < 0.95) { // metal
+                    list[i++] = new sphere(center, 0.2,
+                            new metal(vec3(0.5*(1 + drand48()), 0.5*(1 + drand48()), 0.5*(1 + drand48())),  0.5*drand48()));
+                }
+                else {  // glass
+                    list[i++] = new sphere(center, 0.2, new dielectric(1.5));
+                }
+            }
+        }
+    }
+
+    list[i++] = new sphere(vec3(0, 1, 0), 1.0, new dielectric(1.5));
+    list[i++] = new sphere(vec3(-4, 1, 0), 1.0, new lambertian(vec3(0.4, 0.2, 0.1)));
+    list[i++] = new sphere(vec3(4, 1, 0), 1.0, new metal(vec3(0.7, 0.6, 0.5), 0.0));
+
+    return new hitable_list(list,i);
+}
+```
+
+<hr>
+
+End of Part I
