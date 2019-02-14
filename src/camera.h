@@ -19,8 +19,10 @@ class camera{
 public:
 	//vfov：视野域，也就是视野的角度；aspect：屏幕width与height之比；aperture：光圈（透镜的直径）；focus_dist：焦距
 	camera(vec3 lookfrom, vec3 lookat, const vec3 vup, const float vfov, const float aspect,
-		   float aperture, float focus_dist)
+		   float aperture, float focus_dist, float t0, float t1)
 	{
+		time0 = t0;
+		time1 = t1;
 		lens_radius = aperture / 2;
 
 		float theta = vfov * M_PI / 180.0;//弧度制
@@ -39,12 +41,12 @@ public:
 		vertical = 2 * half_height * focus_dist * v;
 	}
 
-	//光线从光源点射向被观察点的光线，光源以lookfrom为圆心，lens_radius为半径的圆（也就是透镜表面）发射
 	ray get_ray(float s, float t)
 	{
 		vec3 rd = lens_radius * random_in_unit_disk();
 		vec3 offset = u * rd.x() + v * rd.y();
-		return ray(origin + offset, lower_left_corner + s * horizontal + t * vertical - origin - offset);
+		float time = time0 + drand48() * (time1 - time0);//使得随机在[time0,time1)的时间段内产生一条光线
+		return ray(origin + offset, lower_left_corner + s * horizontal + t * vertical - origin - offset, time);
 	}
 
 private:
@@ -53,6 +55,7 @@ private:
 	vec3 horizontal;//画面水平矢量
 	vec3 vertical;//画面垂直矢量
 	vec3 u, v, w;//一组相机空间的正交基
+	float time0, time1;
 
 	float lens_radius;
 };
