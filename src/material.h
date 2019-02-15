@@ -7,6 +7,7 @@
 
 #include "rays.h"
 #include "hitable.h"
+#include "texture.h"
 
 vec3 random_in_unit_sphere() {
 	vec3 p;
@@ -52,19 +53,19 @@ public:
 class lambertian : public material
 {
 public:
-	lambertian(const vec3 &a) : albedo(a){}
+	lambertian(texture *a) : albedo(a){}
 
 	//入射光，hit点的的记录，衰减，散射
 	virtual bool scatter(const ray &r_in, const hit_record &rec, vec3 &attenuation, ray &scattered) const
 	{
 		vec3 target = rec.p + rec.normal + random_in_unit_sphere();//进行漫反射随机化反射方向
 		scattered = ray(rec.p, target - rec.p, r_in.time());//散射光线
-		attenuation = albedo;
+		attenuation = albedo->value(0, 0, rec.p);
 		return true;
 	}
 
 private:
-	vec3 albedo;//反射率
+	texture *albedo;//反射率（根据绑定的纹理内容进行处理）
 };
 
 class metal : public material{

@@ -517,5 +517,322 @@ bvh_node::bvh_node(hitable **l, int n, float time0, float time1) {
 
 当进入的列表是两个元素时，我在每个子树中放置一个并结束递归。遍历算法应该是平滑的，不必检查空指针，所以如果只有一个元素，在每个子树中复制它
 
+最后在main中的`random_scene`中返回bvh_node的构建即可
+
+```cpp
+	return new bvh_node(list, i, 0, 1);
+```
+
 <hr>
 
+纹理
+
+为了让整个图像成为我们真正想要的，我们要添加对于纹理的要求:
+
+```cpp
+class texture  {
+public:
+	//表示某个uv点的rgb值的接口
+	virtual vec3 value(float u, float v, const vec3& p) const = 0;
+};
+```
+
+我们现在能够通过纹理指针来添加纹理材质通过提换原来用vec3表达的颜色
+
+```cpp
+//漫反射
+class lambertian : public material {
+public:
+	lambertian(texture *a) : albedo(a){}
+
+	//入射光，hit点的的记录，衰减，散射
+	virtual bool scatter(const ray &r_in, const hit_record &rec, vec3 &attenuation, ray &scattered) const
+	{
+		vec3 target = rec.p + rec.normal + random_in_unit_sphere();//进行漫反射随机化反射方向
+		scattered = ray(rec.p, target - rec.p, r_in.time());//散射光线
+		attenuation = albedo->value(0, 0, rec.p);
+		return true;
+	}
+
+private:
+	texture *albedo;//反射率（根据绑定的纹理内容进行处理）
+};
+```
+
+如果还是想要原来的效果的话，现在提供以下函数
+
+```cpp
+class constant_texture : public texture {
+public:
+	constant_texture() { }
+	constant_texture(vec3 c) : color(c) { }
+
+	virtual vec3 value(float u, float v, const vec3& p) const {
+		return color;
+	}
+
+private:
+	vec3 color;
+};
+```
+
+原来是`new lambertain(vec3(0.5, 0.5, 0.5))`现在变成了`new lambertian(new constrtant_texture(vec3(0.5, 0.5, 0.5)))`，用来表示一个恒定的纹理
+
+我们能够创造一个`checker texture`通过标注`sin`或者`cos`作为备用，如果我们在所有三个维度中乘以三角函数，则乘积的符号形成3D检查器模式，这些odd/even指针能够指向恒定纹理或者其他程序化纹理，这是由Pat Hanrahan在20世纪80年代引入的着色器网络的一部分
+
+```cpp
+//建立一个棋盘状的纹理
+class checker_texture : public texture{
+public:
+	checker_texture(){}
+	checker_texture(texture *t0, texture *t1) : even(t0), odd(t1){}
+
+	virtual vec3 value(float u, float v, const vec3 &p) const
+	{
+		float sines = sin(10 * p.x()) * sin(10 * p.y()) * sin(10 * p.z());
+		if (sines < 0)
+			return odd->value(u, v, p);
+		else
+			return even->value(u, v, p);
+	}
+
+private:
+	texture *odd;
+	texture *even;
+};
+```
+
+<hr>
+
+Perlin噪音
+
+让纹理变得更cool，我们引入Perlin噪音
+
+除了简单迅速以外，柏林噪声的另一个关键特性是它对于相同的输入永远返回相同的随机数字，输入点附近的点返回近似的数字。
+
+我们可以用随机数的3D数组来平铺所有空间并在块中使用它们
+
+现在如果我们创建一些正真使用这些在0和1之间的float值的纹理然后创造了灰色的颜色
+
+```cpp
+class perlin {
+public:
+	float noise(const vec3& p) const {
+		float u = p.x() - floor(p.x());
+		float v = p.y() - floor(p.y());
+		float w = p.z() - floor(p.z());
+		int i = int(4 * p.x()) & 255;
+		int j = int(4 * p.y()) & 255;
+		int k = int(4 * p.z()) & 255;
+		return ranfloat[perm_x[i] ^ perm_y[j] ^ perm_z[k]];
+	}
+	static float *ranfloat;
+	static int *perm_x;
+	static int *perm_y;
+	static int *perm_z;
+};
+
+static float* perlin_generate() {
+	auto *p = new float[256];
+	for (int i = 0; i < 256; ++i)
+		p[i] = drand48();
+	return p;
+}
+
+void permute(int *p, int n) {
+	for (int i = n - 1; i > 0; i--)
+	{
+		int target = int(drand48() * (i + 1));
+		int tmp = p[i];
+		p[i] = p[target];
+		p[target] = tmp;
+	}
+}
+
+static int* perlin_generate_perm() {
+	int * p = new int[256];
+	for (int i = 0; i < 256; i++)
+		p[i] = i;
+	permute(p, 256);
+	return p;
+}
+
+float *perlin::ranfloat = perlin_generate();
+int *perlin::perm_x = perlin_generate_perm();
+int *perlin::perm_y = perlin_generate_perm();
+int *perlin::perm_z = perlin_generate_perm();
+```
+
+创造出Perlin噪声纹理：
+
+```cpp
+class noise_texture : public texture {
+public:
+	noise_texture() {}
+	virtual vec3 value(float u, float v, const vec3& p) const {
+		return vec3(1,1,1)*noise.noise(p);
+	}
+
+private:
+	perlin noise;
+};
+```
+
+使用两个球的简易demo进行测试：
+
+```cpp
+hitable *two_perlin_spheres()
+{
+	texture *pertext = new noise_texture();
+	hitable **list = new hitable* [2];
+	list[0] = new sphere(vec3(0,-1000,0),1000,new lambertian(pertext));
+	list[1] = new sphere(vec3(0,2,0),2,new lambertian(pertext));
+	return new hitable_list(list,2);
+}
+```
+
+得到如下效果
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_1.png)
+
+我们可以让它更加线性化：
+
+```cpp
+inline float trilinear_interp(float c[2][2][2],float u, float v,float w)
+{
+	float accum = 0;
+	for(int i = 0; i < 2; i++)
+		for(int j = 0; j < 2; j++)
+			for(int k = 0; k < 2; k++)
+				accum += (i * u + (1 - i) * (1 - u)) * (j * v + (1 - j) * (1 - v)) * (k * w + (1 - k) * (1 - w)) *
+						 c[i][j][k];
+	return accum;
+}
+
+class perlin {
+public:
+	float noise(const vec3& p) const {
+		float u = p.x() - floor(p.x());
+		float v = p.y() - floor(p.y());
+		float w = p.z() - floor(p.z());
+//		int i = int(4 * p.x()) & 255;
+//		int j = int(4 * p.y()) & 255;
+//		int k = int(4 * p.z()) & 255;
+//		return ranfloat[perm_x[i] ^ perm_y[j] ^ perm_z[k]];
+		float c[2][2][2];
+		int i = floor(p.x());
+		int j = floor(p.y());
+		int k = floor(p.z());
+		for (int di = 0; di < 2; di++)
+			for (int dj = 0; dj < 2; dj++)
+				for (int dk = 0; dk < 2; dk++)
+					c[di][dj][dk] = ranfloat[perm_x[(i + di) & 255] ^ perm_y[(j + dj) & 255] ^ perm_z[(k + dk) & 255]];
+
+		return trilinear_interp(c, u, v, w);
+	}
+```
+
+得到以下效果：
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_2.png)
+
+但是这张图我们明显可以看到大地具有网格特征，优化它的标准技巧是使用hermite立方体来舍入插值
+
+```cpp
+	float noise(const vec3& p) const {
+		float u = p.x() - floor(p.x());
+		float v = p.y() - floor(p.y());
+		float w = p.z() - floor(p.z());
+		u = u * u * (3 - 2 * u);
+		v = v * v * (3 - 2 * v);
+		w = w * w * (3 - 2 * w);
+```
+
+得到以下效果，这次明显更像一个image了：
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_3.png)
+
+但是还是有一些像网格，那我们额外增加一个`scale`的控制参数进行控制
+
+```cpp
+class noise_texture : public texture {
+public:
+	noise_texture() {}
+	noise_texture(float scale): scale(scale){}
+	
+	virtual vec3 value(float u, float v, const vec3& p) const {
+		return vec3(1,1,1)*noise.noise(scale * p);
+	}
+
+private:
+	perlin noise;
+	float scale;
+};
+```
+
+调整后得到的图像如下：
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_4.png)
+
+但是还是有一点砖格的感觉，这也许是因为min和max这组总是在x/y/z轴的整数上，而不是浮点数；Ken Perlin的算法非常巧妙的地方是他没有直接将单位随机向量输出到点，而是使用点积来移动最大和最小值。
+
+```
+static vec3* perlin_generate() {
+	auto *p = new vec3[256];
+	for (int i = 0; i < 256; ++i)
+		p[i] = unit_vector(vec3(-1 + 2*drand48(),-1 + 2*drand48(),-1 + 2*drand48())));
+	return p;
+}
+
+inline float perlin_interp(vec3 c[2][2][2],float u, float v,float w)
+{
+	float uu = u * u * (3 - 2 * u);
+	float vv = v * v * (3 - 2 * v);
+	float ww = w * w * (3 - 2 * w);
+	float accum = 0;
+	for(int i = 0; i < 2; i++)
+		for(int j = 0; j < 2; j++)
+			for (int k = 0; k < 2; k++)
+			{
+				vec3 weight_v(u - i, v - j, w - k);
+				accum += (i * uu + (1 - i) * (1 - uu)) * (j * vv + (1 - j) * (1 - vv)) * (k * ww + (1 - k) * (1 - ww)) *
+						 dot(c[i][j][k], weight_v);
+			}
+	return accum;
+}
+
+class perlin {
+public:
+	float noise(const vec3& p) const {
+		float u = p.x() - floor(p.x());
+		float v = p.y() - floor(p.y());
+		float w = p.z() - floor(p.z());
+
+		vec3 c[2][2][2];
+		int i = floor(p.x());
+		int j = floor(p.y());
+		int k = floor(p.z());
+		for (int di = 0; di < 2; di++)
+			for (int dj = 0; dj < 2; dj++)
+				for (int dk = 0; dk < 2; dk++)
+					c[di][dj][dk] = ranvec[perm_x[(i + di) & 255] ^ perm_y[(j + dj) & 255] ^ perm_z[(k + dk) & 255]];
+
+		return perlin_interp(c,u,v,w);
+	}
+
+private:
+	static vec3 *ranvec;
+	static int *perm_x;
+	static int *perm_y;
+	static int *perm_z;
+};
+
+//...
+
+vec3 *perlin::ranvec = perlin_generate();
+//...
+```
+
+最终结果如下：
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_5.png)

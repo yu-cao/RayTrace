@@ -6,6 +6,8 @@
 #include "camera.h"
 #include "material.h"
 #include "moving_sphere.h"
+#include "bvh.h"
+#include "perlin.h"
 
 //depth：进行多少次光线追踪
 vec3 color(const ray &r, hitable *world, int depth)
@@ -29,13 +31,15 @@ vec3 color(const ray &r, hitable *world, int depth)
 }
 
 hitable *random_scene(){
-	int n = 500;//500个球
+	int n = 200;//200个球
+	texture *checker = new checker_texture(new constant_texture(vec3(0.2, 0.3, 0.1)),
+										 new constant_texture(vec3(0.9, 0.9, 0.9)));
 	hitable **list = new hitable *[n + 1];
-	list[0] = new sphere(vec3(0, -1000, 0), 1000, new lambertian(vec3(0.5, 0.5, 0.5)));//大地表面背景
+	list[0] = new sphere(vec3(0, -1000, 0), 1000, new lambertian(checker));//大地表面背景
 	int i = 1;
-	for (int a = -10; a < 10; a++)
+	for (int a = -5; a < 5; a++)
 	{
-		for (int b = -10; b < 10; b++)
+		for (int b = -5; b < 5; b++)
 		{
 			float choose_mat = drand48();
 			vec3 center(a + 0.9 * drand48(), 0.2, b + 0.9 * drand48());
@@ -44,8 +48,9 @@ hitable *random_scene(){
 				if (choose_mat < 0.8)
 				{  // diffuse
 					list[i++] = new moving_sphere(center, center + vec3(0, 0.5 * drand48(), 0), 0.0, 1.0, 0.2,
-												  new lambertian(vec3(drand48() * drand48(), drand48() * drand48(),
-																	  drand48() * drand48())));
+												  new lambertian(new constant_texture(
+														  vec3(drand48() * drand48(), drand48() * drand48(),
+															   drand48() * drand48()))));
 				}
 				else if (choose_mat < 0.95)
 				{ // metal
@@ -62,10 +67,19 @@ hitable *random_scene(){
 	}
 
 	list[i++] = new sphere(vec3(0, 1, 0), 1.0, new dielectric(1.5));
-	list[i++] = new sphere(vec3(-4, 1, 0), 1.0, new lambertian(vec3(0.4, 0.2, 0.1)));
+	list[i++] = new sphere(vec3(-4, 1, 0), 1.0, new lambertian(new constant_texture(vec3(0.4, 0.2, 0.1))));
 	list[i++] = new sphere(vec3(4, 1, 0), 1.0, new metal(vec3(0.7, 0.6, 0.5), 0.0));
 
-	return new hitable_list(list, i);
+	return new bvh_node(list, i, 0, 1);
+}
+
+hitable *two_perlin_spheres()
+{
+	texture *pertext = new noise_texture();
+	hitable **list = new hitable* [2];
+	list[0] = new sphere(vec3(0,-1000,0),1000,new lambertian(pertext));
+	list[1] = new sphere(vec3(0,2,0),2,new lambertian(pertext));
+	return new hitable_list(list,2);
 }
 
 
@@ -78,7 +92,8 @@ int main(int argc, char* argv[])
 
 	std::cout << "P3\n" << nx << " " << ny << "\n255\n";
 
-	hitable *world = random_scene();
+	//hitable *world = random_scene();
+	hitable *world = two_perlin_spheres();
 
 	vec3 lookfrom(12,2,3);
 	vec3 lookat(0,0,0);
