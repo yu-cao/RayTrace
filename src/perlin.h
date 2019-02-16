@@ -26,7 +26,8 @@ inline float perlin_interp(vec3 c[2][2][2],float u, float v,float w)
 
 class perlin {
 public:
-	float noise(const vec3& p) const {
+	float noise(const vec3 &p) const
+	{
 		float u = p.x() - floor(p.x());
 		float v = p.y() - floor(p.y());
 		float w = p.z() - floor(p.z());
@@ -40,7 +41,22 @@ public:
 				for (int dk = 0; dk < 2; dk++)
 					c[di][dj][dk] = ranvec[perm_x[(i + di) & 255] ^ perm_y[(j + dj) & 255] ^ perm_z[(k + dk) & 255]];
 
-		return perlin_interp(c,u,v,w);
+		return perlin_interp(c, u, v, w);
+	}
+
+	//把几个noise进行叠加形成turbulence
+	float turb(const vec3 &p, int depth = 7) const
+	{
+		float accum = 0;
+		vec3 temp_p = p;
+		float weight = 1.0;
+		for (int i = 0; i < depth; i++)
+		{
+			accum += weight * noise(temp_p);
+			weight *= 0.5;
+			temp_p *= 2;
+		}
+		return fabs(accum);
 	}
 
 private:
@@ -53,7 +69,7 @@ private:
 static vec3* perlin_generate() {
 	auto *p = new vec3[256];
 	for (int i = 0; i < 256; ++i)
-		p[i] = unit_vector(vec3(-1 + 2*drand48(),-1 + 2*drand48(),-1 + 2*drand48())));
+		p[i] = unit_vector(vec3(-1 + 2*drand48(),-1 + 2*drand48(),-1 + 2*drand48()));
 	return p;
 }
 

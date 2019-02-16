@@ -758,7 +758,7 @@ public:
 class noise_texture : public texture {
 public:
 	noise_texture() {}
-	noise_texture(float scale): scale(scale){}
+	noise_texture(float scale): scale(scale){}//需要在main函数中进行修改传入scale，否则渲染scale默认为0，渲染出来都是黑色
 	
 	virtual vec3 value(float u, float v, const vec3& p) const {
 		return vec3(1,1,1)*noise.noise(scale * p);
@@ -836,3 +836,43 @@ vec3 *perlin::ranvec = perlin_generate();
 最终结果如下：
 
 ![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_5.png)
+
+我们通常使用具有多个相加频率的复合噪声。 这称为Turbulence，是对噪音重复调用的总统称：
+
+```cpp
+float turb(const vec3& p, int depth=7) const {
+    float accum = 0;
+    vec3 temp_p = p;
+    float weight = 1.0;
+    for (int i = 0; i < depth; i++) {
+        accum += weight*noise(temp_p);
+        weight *= 0.5;
+        temp_p *= 2;
+    }
+    return fabs(accum);
+}
+```
+
+得到如下图像：
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_6.png)
+
+这是我们直接使用scale对于其进行直接的缩放，基本的想法是去将颜色属性进行一些sin变换，然后进行一些调整以符合预期效果，如下：
+
+```cpp
+virtual vec3 value(float u, float v, const vec3& p) const {
+	//return vec3(1,1,1)*noise.turb(scale * p);
+	return vec3(1, 1, 1) * 0.5 * (1 + sin(scale * p.z() + 10 * noise.turb(p)));
+}
+```
+
+得到以下图像：
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Perlin_7.png)
+
+<hr>
+
+图像纹理映射
+
+也就是给模型加上贴图
+
