@@ -60,7 +60,7 @@ public:
 	{
 		vec3 target = rec.p + rec.normal + random_in_unit_sphere();//进行漫反射随机化反射方向
 		scattered = ray(rec.p, target - rec.p, r_in.time());//散射光线
-		attenuation = albedo->value(0, 0, rec.p);
+		attenuation = albedo->value(rec.u, rec.v, rec.p);//需要在反射强度上通过u,v值进行控制
 		return true;
 	}
 

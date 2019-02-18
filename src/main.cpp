@@ -8,6 +8,11 @@
 #include "moving_sphere.h"
 #include "bvh.h"
 #include "perlin.h"
+#include <fstream>
+#include "stb_image.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#include "image_texture.h"
 
 //depth：进行多少次光线追踪
 vec3 color(const ray &r, hitable *world, int depth)
@@ -82,6 +87,13 @@ hitable *two_perlin_spheres()
 	return new hitable_list(list,2);
 }
 
+hitable *earth()
+{
+	int nx, ny, nn;
+	unsigned char *tex_data = stbi_load("../texture/earthmap.jpg", &nx, &ny, &nn, 0);
+	material *mat = new lambertian(new image_texture(tex_data, nx, ny));
+	return new sphere(vec3(0, 0, 0), 2, mat);
+}
 
 int main(int argc, char* argv[])
 {
@@ -89,11 +101,14 @@ int main(int argc, char* argv[])
 	int nx = 200;
 	int ny = 100;
 	int ns = 100;//对一个像素点重复采样进行抗锯齿
+	std::ofstream file;
+	file.open("../output/Part2/texture.ppm");
 
-	std::cout << "P3\n" << nx << " " << ny << "\n255\n";
+	file << "P3\n" << nx << " " << ny << "\n255\n";
 
 	//hitable *world = random_scene();
-	hitable *world = two_perlin_spheres();
+	//hitable *world = two_perlin_spheres();
+	hitable *world = earth();
 
 	vec3 lookfrom(12,2,3);
 	vec3 lookat(0,0,0);
@@ -118,12 +133,14 @@ int main(int argc, char* argv[])
 				col += color(r, world, 0);
 			}
 			col /= float(ns);
+			col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
 
 			int ir = int(255.99 * col[0]);
 			int ig = int(255.99 * col[1]);
 			int ib = int(255.99 * col[2]);
 
-			std::cout << ir << " " << ig << " " << ib << "\n";
+			file << ir << " " << ig << " " << ib << "\n";
 		}
 	}
+	file.close();
 }

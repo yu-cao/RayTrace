@@ -874,5 +874,120 @@ virtual vec3 value(float u, float v, const vec3& p) const {
 
 图像纹理映射
 
-也就是给模型加上贴图
+也就是给模型加上贴图，我们可以像上面一样通过程序化使用一个向量p为纯色纹理建立索引，也可以通过一个image使用其2D的u，v进行纹理绑定，而且需要一个值来调整贴图的缩放
+
+对于一个像素为(i,j)的在整个image为nx和ny的时候，我们可以有如下公式
+
+```py
+u = i / (nx - 1)
+v = j / (ny - 1)
+```
+
+对于球体，我们需要想三维矢量转换为极坐标再转换为u,v
+
+从向量的
+
+```
+x = cos(φ)*cos(θ)
+y = sin(φ)*cos(θ)
+z = sin(θ)
+```
+
+可以反求得
+
+```
+φ = atan2(y,x)//计算结果为[-π, π]
+θ = asin(z)//计算结果为[-π/2, π/2]
+```
+
+上面的θ指的是从极点下来的角度，φ指的是围着通过极点的轴的角度
+
+```
+u = φ / (2 * π)
+v = θ / π
+```
+
+得到以下image_texture类，用来进行外部image对球体进行绑定
+
+```cpp
+class image_texture : public texture
+{
+public:
+	image_texture(){}
+	image_texture(unsigned char *pixels, int A, int B) : data(pixels), nx(A), ny(B)
+	{}
+
+	virtual vec3 value(float u, float v, const vec3 &p) const;
+private:
+	unsigned char *data;
+	int nx, ny;
+};
+
+vec3 image_texture::value(float u, float v, const vec3 &p) const
+{
+	int i = u * nx;
+	int j = (1 - v) * ny - 0.001;
+	if (i < 0) i = 0;
+	if (j < 0) j = 0;
+	if (i > nx - 1)i = nx - 1;
+	if (j > ny - 1)j = ny - 1;
+	float r = int(data[3 * i + 3 * nx * j]) / 255.0;
+	float g = int(data[3 * i + 3 * nx * j + 1]) / 255.0;
+	float b = int(data[3 * i + 3 * nx * j + 2]) / 255.0;
+	return vec3(r, g, b);
+}
+```
+
+由此，uv的范围能够被一个统一的方程计算，也就是
+
+```cpp
+	if (temp < t_max && temp > t_min)	
+	{
+//...
+			get_sphere_uv((rec.p - center) / radius, rec.u, rec.v);
+//...
+	}
+	temp = (-b + sqrt(discriminant)) / a;
+	if (temp < t_max && temp > t_min)	{
+//...
+		get_sphere_uv((rec.p - center) / radius, rec.u, rec.v);
+//...
+	}
+```
+
+由此我们可以编写场景代码：
+
+```cpp
+hitable *earth() {
+    int nx, ny, nn;
+    unsigned char *tex_data = stbi_load("earthmap.jpg", &nx, &ny, &nn, 0);
+    material *mat = new lambertian(new image_texture(tex_data, nx, ny));
+    return new sphere(vec3(0,0, 0), 2, mat);
+}
+```
+
+不要忘记：在使用lambertian时务必要修改attenuation的使用值，使之调用`image_texture`的`value`函数（不然会出现纹理bind渲染出来无现象的情况）
+
+```cpp
+class lambertian : public material
+{
+public:
+	lambertian(texture *a) : albedo(a){}
+
+	//入射光，hit点的的记录，衰减，散射
+	virtual bool scatter(const ray &r_in, const hit_record &rec, vec3 &attenuation, ray &scattered) const
+	{
+		//...
+		attenuation = albedo->value(rec.u, rec.v, rec.p);//需要在反射强度上通过u,v值进行控制
+		return true;
+	}
+
+private:
+	texture *albedo;//反射率（根据绑定的纹理内容进行处理）
+};
+```
+
+<hr>
+
+正方形与光照
 
