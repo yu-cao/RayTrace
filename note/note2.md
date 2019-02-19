@@ -991,3 +991,143 @@ private:
 
 正方形与光照
 
+这部分我们开始制作光源，首先我们需要一个发光的材质，我们把这个设为背景一样，不进行反射：
+
+```cpp
+//自发光材质
+class diffuse_light:public material
+{
+public:
+	diffuse_light(texture *a):emit(a){}
+
+	virtual bool scatter(const ray &r_in, const hit_record &rec, vec3 &attenuation, ray &scattered) const override
+	{ return false; }
+
+	virtual vec3 emitted(float u, float v, const vec3 &p) const override
+	{ return emit->value(u, v, p); }
+
+private:
+	texture *emit;
+};
+```
+
+修改material这个抽象基类，提供emitted接口，对于没有emitted的材质，默认emitted为0
+
+```cpp
+class material
+{
+public:
+	virtual bool scatter(const ray &r_in, const hit_record &rec, vec3 &attenuation, ray &scattered) const = 0;
+
+	virtual vec3 emitted(float u, float v, const vec3 &p) const
+	{ return vec3(0, 0, 0); }//对于所有不发光的，一律设置发光是(0,0,0)，使之不产生叠加效应
+};
+```
+
+接下来为了验证的自发光材质真的有效，我们将背景设置为黑色
+
+```cpp
+//depth：进行多少次光线追踪
+vec3 color(const ray &r, hitable *world, int depth)
+{
+	hit_record rec;
+	if (world->hit(r, 0.001, FLT_MAX, rec))
+	{
+		ray scattered;//散射光线
+		vec3 attenuation;//反射率
+		vec3 emitted = rec.mat_ptr->emitted(rec.u,rec.v,rec.p);//增加了自发光的效应
+		if (depth < 50 && rec.mat_ptr->scatter(r,rec,attenuation,scattered))//调用两个派生类进行分别的渲染
+			return emitted + attenuation * color(scattered, world, depth + 1);
+		else
+			return emitted;
+	}
+	else
+	{
+//		vec3 unit_direction = unit_vector(r.direction());//归一化成单位坐标
+//		float t = 0.5 * (unit_direction.y() + 1.0f);//全部变成正数方便混色，t=1时变成blue，t=0时变成white
+//		return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);//就是混色操作，类似线性插值
+		return vec3(0,0,0);
+	}
+}
+```
+
+接下来我们要建立矩形，相比较球体只需要球心和半径，矩形就比较复杂了
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Rectangle_1.png)
+
+由光线方程`p(t) = A + tB`，可得在z分轴上有`z(t) = A.z + t*B.z`当我们对于一个已知平面`z = k`来说，t就是可解的`t = (k - A.z) / B.z`
+
+一旦我们有t，就可以得到x与y的方程
+
+```
+x = A.x + t*B.x
+y = A.y + t*B.y
+```
+
+如果hit，则x∈[x0,x1],y∈[y0,y1]，由此可以完成代码（同理可以完成xz平面，yz平面的代码）：
+
+```cpp
+class xy_rect : public hitable
+{
+public:
+	xy_rect(){}
+	xy_rect(float _x0, float _x1, float _y0, float _y1, float _k, material *mat) : x0(_x0), x1(_x1), y0(_y0), y1(_y1),
+																				   k(_k), mp(mat){};
+
+	virtual bool hit(const ray &r, float t0, float t1, hit_record &rec) const;
+
+	virtual bool bounding_box(float t0, float t1, aabb &box) const
+	{
+		box = aabb(vec3(x0, y0, k - 0.0001), vec3(x1, y1, k + 0.0001));//aabb盒取矩阵的左下角和右上角，包含一个薄平面
+		return true;
+	}
+
+	material *mp;
+	float x0, x1, y0, y1, k;
+};
+
+bool xy_rect::hit(const ray &r, float t0, float t1, hit_record &rec) const
+{
+	float t = (k - r.origin().z()) / r.direction().z();//通过k计算得到t值，并且判断合理性
+	if (t < t0 || t > t1)
+		return false;
+	float x = r.origin().x() + t * r.direction().x();//计算得到x和y并判断合理性
+	float y = r.origin().y() + t * r.direction().y();
+	if (x < x0 || x > x1 || y < y0 || y > y1)
+		return false;
+	rec.u = (x - x0) / (x1 - x0);//得到光线击中点在矩形表面的uv值
+	rec.v = (y - y0) / (y1 - y0);
+	rec.t = t;
+	rec.mat_ptr = mp;//材质绑定
+	rec.p = r.point_at_parameter(t);//击中点的光线常数：(A+tB)的值
+	rec.normal = vec3(0, 0, 1);//因为是xy平面，必定与z轴垂直，所以z = 1即是法线方向
+	return true;
+}
+```
+
+我们提供一个上方的球体和右端的矩形
+
+```cpp
+hitable *simple_light()
+{
+	texture *pertext = new noise_texture(4);
+	hitable **list = new hitable *[4];
+	list[0] = new sphere(vec3(0, -1000, 0), 1000, new lambertian(pertext));
+	list[1] = new sphere(vec3(0, 2, 0), 2, new lambertian(pertext));
+	//注意到我们设置的亮度大于(1,1,1)，允许其照亮其他东西
+	list[2] = new sphere(vec3(0, 7, 0), 2, new diffuse_light(new constant_texture(vec3(4, 4, 4))));
+	list[3] = new xy_rect(3, 5, 1, 3, -2, new diffuse_light(new constant_texture(vec3(4, 4, 4))));
+	return new hitable_list(list, 4);
+}
+
+//照相机设定常数如下
+	hitable *world = simple_light();
+
+	vec3 lookfrom(13,2,3);
+	vec3 lookat(0,2,0);
+	const vec3 vup(0,1,0);
+	const float fov = 30.0;
+	float dist_to_focus = 10;//焦距长度 为对焦到lookat位置的 长度
+	float aperture = 0.0;//光圈（透镜）大小
+	camera cam(lookfrom, lookat, vup, fov, float(nx) / float(ny), aperture, dist_to_focus, 0.0, 1.0);
+```

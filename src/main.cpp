@@ -9,29 +9,33 @@
 #include "bvh.h"
 #include "perlin.h"
 #include <fstream>
+#include <float.h>
 #include "stb_image.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include "image_texture.h"
+#include "aa_rect.h"
 
 //depth：进行多少次光线追踪
 vec3 color(const ray &r, hitable *world, int depth)
 {
 	hit_record rec;
-	if (world->hit(r, 0.001, MAXFLOAT, rec))
+	if (world->hit(r, 0.001, FLT_MAX, rec))
 	{
 		ray scattered;//散射光线
 		vec3 attenuation;//反射率
-		if (depth < 20 && rec.mat_ptr->scatter(r,rec,attenuation,scattered))//调用两个派生类进行分别的渲染
-			return attenuation * color(scattered, world, depth + 1);
+		vec3 emitted = rec.mat_ptr->emitted(rec.u,rec.v,rec.p);//增加了自发光的效应
+		if (depth < 50 && rec.mat_ptr->scatter(r,rec,attenuation,scattered))//调用两个派生类进行分别的渲染
+			return emitted + attenuation * color(scattered, world, depth + 1);
 		else
-			return vec3(0,0,0);
+			return emitted;
 	}
 	else
 	{
-		vec3 unit_direction = unit_vector(r.direction());//归一化成单位坐标
-		float t = 0.5 * (unit_direction.y() + 1.0f);//全部变成正数方便混色，t=1时变成blue，t=0时变成white
-		return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);//就是混色操作，类似线性插值
+//		vec3 unit_direction = unit_vector(r.direction());//归一化成单位坐标
+//		float t = 0.5 * (unit_direction.y() + 1.0f);//全部变成正数方便混色，t=1时变成blue，t=0时变成white
+//		return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);//就是混色操作，类似线性插值
+		return vec3(0,0,0);
 	}
 }
 
@@ -95,25 +99,39 @@ hitable *earth()
 	return new sphere(vec3(0, 0, 0), 2, mat);
 }
 
+hitable *simple_light()
+{
+	texture *pertext = new noise_texture(4);
+	hitable **list = new hitable *[4];
+	list[0] = new sphere(vec3(0, -1000, 0), 1000, new lambertian(pertext));
+	list[1] = new sphere(vec3(0, 2, 0), 2, new lambertian(pertext));
+	//注意到我们设置的亮度大于(1,1,1)，允许其照亮其他东西
+	list[2] = new sphere(vec3(0, 7, 0), 2, new diffuse_light(new constant_texture(vec3(4, 4, 4))));
+	list[3] = new xy_rect(3, 5, 1, 3, -2, new diffuse_light(new constant_texture(vec3(4, 4, 4))));
+	return new hitable_list(list, 4);
+}
+
 int main(int argc, char* argv[])
 {
 	//画面是200*100
-	int nx = 200;
-	int ny = 100;
+	int nx = 400;
+	int ny = 200;
 	int ns = 100;//对一个像素点重复采样进行抗锯齿
 	std::ofstream file;
-	file.open("../output/Part2/texture.ppm");
+	file.open("../output/Part2/emit1.ppm");
 
 	file << "P3\n" << nx << " " << ny << "\n255\n";
 
 	//hitable *world = random_scene();
 	//hitable *world = two_perlin_spheres();
-	hitable *world = earth();
+	//hitable *world = earth();
 
-	vec3 lookfrom(12,2,3);
-	vec3 lookat(0,0,0);
+	hitable *world = simple_light();
+
+	vec3 lookfrom(13,2,3);
+	vec3 lookat(0,2,0);
 	const vec3 vup(0,1,0);
-	const float fov = 20.0;
+	const float fov = 30.0;
 	float dist_to_focus = 10;//焦距长度 为对焦到lookat位置的 长度
 	float aperture = 0.0;//光圈（透镜）大小
 	camera cam(lookfrom, lookat, vup, fov, float(nx) / float(ny), aperture, dist_to_focus, 0.0, 1.0);
