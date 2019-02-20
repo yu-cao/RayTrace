@@ -15,6 +15,7 @@
 #include "stb_image.h"
 #include "image_texture.h"
 #include "aa_rect.h"
+#include "hitable.h"
 
 //depth：进行多少次光线追踪
 vec3 color(const ray &r, hitable *world, int depth)
@@ -111,27 +112,44 @@ hitable *simple_light()
 	return new hitable_list(list, 4);
 }
 
+hitable *cornell_box()
+{
+	hitable **list = new hitable *[6];
+	int i = 0;
+	material *red = new lambertian(new constant_texture(vec3(0.65, 0.05, 0.05)));
+	material *white = new lambertian(new constant_texture(vec3(0.73, 0.73, 0.73)));
+	material *green = new lambertian(new constant_texture(vec3(0.12, 0.45, 0.15)));
+	material *light = new diffuse_light(new constant_texture(vec3(15, 15, 15)));
+	list[i++] = new flip_normals(new yz_rect(0, 555, 0, 555, 555, green));
+	list[i++] = new yz_rect(0, 555, 0, 555, 0, red);
+	list[i++] = new xz_rect(213, 343, 227, 332, 554, light);
+	list[i++] = new flip_normals(new xz_rect(0, 555, 0, 555, 555, white));
+	list[i++] = new xz_rect(0, 555, 0, 555, 0, white);
+	list[i++] = new flip_normals(new xy_rect(0, 555, 0, 555, 555, white));
+	return new hitable_list(list, i);
+}
+
 int main(int argc, char* argv[])
 {
 	//画面是200*100
 	int nx = 400;
 	int ny = 200;
-	int ns = 100;//对一个像素点重复采样进行抗锯齿
+	int ns = 1000;//对一个像素点重复采样进行抗锯齿
 	std::ofstream file;
-	file.open("../output/Part2/emit1.ppm");
+	file.open("../output/Part2/emit3.ppm");
 
 	file << "P3\n" << nx << " " << ny << "\n255\n";
 
 	//hitable *world = random_scene();
 	//hitable *world = two_perlin_spheres();
 	//hitable *world = earth();
+	//hitable *world = simple_light();
+	hitable *world = cornell_box();
 
-	hitable *world = simple_light();
-
-	vec3 lookfrom(13,2,3);
-	vec3 lookat(0,2,0);
+	vec3 lookfrom(278,278,-800);
+	vec3 lookat(278,278,0);
 	const vec3 vup(0,1,0);
-	const float fov = 30.0;
+	const float fov = 40.0;
 	float dist_to_focus = 10;//焦距长度 为对焦到lookat位置的 长度
 	float aperture = 0.0;//光圈（透镜）大小
 	camera cam(lookfrom, lookat, vup, fov, float(nx) / float(ny), aperture, dist_to_focus, 0.0, 1.0);

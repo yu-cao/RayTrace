@@ -1131,3 +1131,94 @@ hitable *simple_light()
 	float aperture = 0.0;//光圈（透镜）大小
 	camera cam(lookfrom, lookat, vup, fov, float(nx) / float(ny), aperture, dist_to_focus, 0.0, 1.0);
 ```
+
+通过这种方法，我们可以构造出一个康奈尔盒(Cornell Box)
+
+康奈尔盒子是由康奈尔大学计算机图形学组的Cindy M. Goral，Kenneth E. Torrance，Donald P. Greenberg和Bennett Battaile在SIGGRAPH'84上发表并发表的论文“模拟漫反射表面之间光的相互作用”中创造的用来测试模拟不同材质如何反射光线的场景
+
+我们构建这个场景：
+
+```cpp
+hitable *cornell_box()
+{
+	hitable **list = new hitable *[6];
+	int i = 0;
+	material *red = new lambertian(new constant_texture(vec3(0.65, 0.05, 0.05)));
+	material *white = new lambertian(new constant_texture(vec3(0.73, 0.73, 0.73)));
+	material *green = new lambertian(new constant_texture(vec3(0.12, 0.45, 0.15)));
+	material *light = new diffuse_light(new constant_texture(vec3(15, 15, 15)));
+	list[i++] = new yz_rect(0, 555, 0, 555, 555, green);
+	list[i++] = new yz_rect(0, 555, 0, 555, 0, red);
+	list[i++] = new xz_rect(213, 343, 227, 332, 554, light);
+	list[i++] = new xz_rect(0, 555, 0, 555, 0, white);
+	list[i++] = new xy_rect(0, 555, 0, 555, 555, white);
+	return new hitable_list(list, i);
+}
+```
+
+摄像机的视角为：
+
+```cpp
+	vec3 lookfrom(278,278,-800);
+	vec3 lookat(278,278,0);
+	const vec3 vup(0,1,0);
+	const float fov = 40.0;
+	float dist_to_focus = 10;//焦距长度 为对焦到lookat位置的 长度
+	float aperture = 0.0;//光圈（透镜）大小
+	camera cam(lookfrom, lookat, vup, fov, float(nx) / float(ny), aperture, dist_to_focus, 0.0, 1.0);
+```
+
+这时候我们可以得到这样的图
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_CornellBox_1.png)
+
+我们丢失了3块wall，原因就是我们的法线方向错误，我们在那三块wall上使用了跟显示的同样的法线方向，但是那样就是向外的，我们需要通过翻转法线方向进行修正
+
+```cpp
+class flip_normals : public hitable {
+public:
+	flip_normals(hitable *p) : ptr(p) {}
+	virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
+		if (ptr->hit(r, t_min, t_max, rec)) {
+			rec.normal = -rec.normal;
+			return true;
+		}
+		else
+			return false;
+	}
+	virtual bool bounding_box(float t0, float t1, aabb& box) const {
+		return ptr->bounding_box(t0, t1, box);
+	}
+	hitable *ptr;
+};
+```
+
+重新布置场景：
+
+```cpp
+hitable *cornell_box()
+{
+	hitable **list = new hitable *[6];
+	int i = 0;
+	material *red = new lambertian(new constant_texture(vec3(0.65, 0.05, 0.05)));
+	material *white = new lambertian(new constant_texture(vec3(0.73, 0.73, 0.73)));
+	material *green = new lambertian(new constant_texture(vec3(0.12, 0.45, 0.15)));
+	material *light = new diffuse_light(new constant_texture(vec3(15, 15, 15)));
+	list[i++] = new flip_normals(new yz_rect(0, 555, 0, 555, 555, green));
+	list[i++] = new yz_rect(0, 555, 0, 555, 0, red);
+	list[i++] = new xz_rect(213, 343, 227, 332, 554, light);
+	list[i++] = new flip_normals(new xz_rect(0, 555, 0, 555, 555, white));
+	list[i++] = new xz_rect(0, 555, 0, 555, 0, white);
+	list[i++] = new flip_normals(new xy_rect(0, 555, 0, 555, 555, white));
+	return new hitable_list(list, i);
+}
+```
+
+这时候得到这样的图
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_CornellBox_2.png)
+
+值得注意的是，渲染康奈尔盒子会比之前的场景慢很多很多,原因是在之前的场景有几乎一半的射线直接照到天上了，剩下的也差不多在2~5次反射之内射到天上。然而康奈尔盒子却几乎可让每条射线跑满最大反射次数，而且噪点非常多
+
+<hr>
+
