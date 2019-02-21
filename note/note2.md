@@ -1222,3 +1222,201 @@ hitable *cornell_box()
 
 <hr>
 
+实例
+
+我们对上面得到的康奈尔盒内添加2个block以符合标准康奈尔盒的基本要求，他们会根据墙进行旋转，首先我们通过6个矩形的图元进行轴对齐
+
+```cpp
+class box: public hitable  {
+public:
+	box() = default;
+	box(const vec3& p0, const vec3& p1, material *ptr);//p0:左下角顶点，p1:右上角顶点
+	virtual bool hit(const ray& r, float t0, float t1, hit_record& rec) const;
+	virtual bool bounding_box(float t0, float t1, aabb& box) const
+	{
+		box = aabb(pmin, pmax);
+		return true;
+	}
+
+private:
+	vec3 pmin, pmax;
+	hitable *list_ptr;
+};
+
+box::box(const vec3& p0, const vec3& p1, material *ptr) {
+	pmin = p0;
+	pmax = p1;
+	hitable **list = new hitable *[6];
+	//计算6个面，其中3个法线需要翻转
+	list[0] = new xy_rect(p0.x(), p1.x(), p0.y(), p1.y(), p1.z(), ptr);
+	list[1] = new flip_normals(new xy_rect(p0.x(), p1.x(), p0.y(), p1.y(), p0.z(), ptr));
+	list[2] = new xz_rect(p0.x(), p1.x(), p0.z(), p1.z(), p1.y(), ptr);
+	list[3] = new flip_normals(new xz_rect(p0.x(), p1.x(), p0.z(), p1.z(), p0.y(), ptr));
+	list[4] = new yz_rect(p0.y(), p1.y(), p0.z(), p1.z(), p1.x(), ptr);
+	list[5] = new flip_normals(new yz_rect(p0.y(), p1.y(), p0.z(), p1.z(), p0.x(), ptr));
+	list_ptr = new hitable_list(list, 6);
+}
+
+bool box::hit(const ray& r, float t0, float t1, hit_record& rec) const {
+	return list_ptr->hit(r, t0, t1, rec);
+}
+```
+
+再在main中进行主场景添加
+
+```cpp
+list[i++] = new box(vec3(130, 0, 65), vec3(295, 165, 230), white);
+list[i++] = new box(vec3(265, 0, 295), vec3(430, 330, 460), white);
+```
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Instance_1.png)
+
+现在我们需要对box进行一些旋转使其符合真正的康奈尔盒。在光线追踪中，这些操作通常通过instance（实例）被完成，一个简单的光线追踪不需要移动任何东西，我们取而代之的是移动光线，使之朝向不同的方向。
+
+比如，我们可以进行一个translation操作（或者准确来说是move操作），我们移动以下这个box使之x轴坐标+2，那么我们经常做的操作实际上是让box留在原地，把击中它的光线的光源x轴坐标-2（也就是说改变了参考系）
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Instance_2.png)
+
+我们得到以下代码：
+
+```cpp
+class translate : public hitable {
+public:
+	translate(hitable *p, const vec3& displacement) : ptr(p), offset(displacement) {}
+	virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const;
+	virtual bool bounding_box(float t0, float t1, aabb& box) const;
+
+private:
+	hitable *ptr;
+	vec3 offset;
+};
+
+bool translate::hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
+	ray moved_r(r.origin() - offset, r.direction(), r.time());//声明一个反向移动了光源的光线
+	if (ptr->hit(moved_r, t_min, t_max, rec))
+	{
+		rec.p += offset;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool translate::bounding_box(float t0, float t1, aabb &box) const {
+	if (ptr->bounding_box(t0, t1, box))
+	{
+		box = aabb(box.min() + offset, box.max() + offset);
+		return true;
+	}
+	else
+		return false;
+}
+```
+
+简单的移动比较简单，但是旋转就不是很容易了，首先我们考虑绕z轴旋转这个操作：
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/note/graph/note2_Instance_3.png)
+
+```
+x' = cos(θ) * x - sin(θ) * y;
+y' = sin(θ) * x + cos(θ) * y;
+```
+
+同理，我们有绕着y旋转的公式：
+
+```
+x' = cos(θ) * x - sin(θ) * z;
+z' = sin(θ) * x + cos(θ) * z;
+```
+
+和绕x轴旋转的公式：
+
+```
+y' = cos(θ) * y - sin(θ) * z;
+z' = sin(θ) * y + cos(θ) * z;
+```
+
+与此同时，表面法向量也需要改变，如果我们hit了，也需要同时改变表面的法向量，如果有放缩scale，整个计算会更加复杂，以康奈尔盒需要的绕y轴旋转为例：
+
+```cpp
+class rotate_y : public hitable {
+public:
+	rotate_y(hitable *p, float angle);
+	virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const;
+	virtual bool bounding_box(float t0, float t1, aabb& box) const
+	{
+		box = bbox;
+		return hasbox;
+	}
+
+private:
+	hitable *ptr;
+	float sin_theta;
+	float cos_theta;
+	bool hasbox;
+	aabb bbox;
+};
+
+rotate_y::rotate_y(hitable *p, float angle) : ptr(p) {
+	float radians = (M_PI / 180.) * angle;
+	sin_theta = sin(radians);
+	cos_theta = cos(radians);
+	hasbox = ptr->bounding_box(0, 1, bbox);
+	vec3 min(FLT_MAX, FLT_MAX, FLT_MAX);
+	vec3 max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	for (int i = 0; i < 2; i++)
+	{
+		for (int j = 0; j < 2; j++)
+		{
+			for (int k = 0; k < 2; k++)
+			{
+				float x = i * bbox.max().x() + (1 - i) * bbox.min().x();
+				float y = j * bbox.max().y() + (1 - j) * bbox.min().y();
+				float z = k * bbox.max().z() + (1 - k) * bbox.min().z();
+				float newx = cos_theta * x + sin_theta * z;
+				float newz = -sin_theta * x + cos_theta * z;
+				vec3 tester(newx, y, newz);
+				for (int c = 0; c < 3; c++)
+				{
+					if (tester[c] > max[c])
+						max[c] = tester[c];
+					if (tester[c] < min[c])
+						min[c] = tester[c];
+				}
+			}
+		}
+	}
+	bbox = aabb(min, max);
+}
+
+bool rotate_y::hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
+	vec3 origin = r.origin();
+	vec3 direction = r.direction();
+	origin[0] = cos_theta * r.origin()[0] - sin_theta * r.origin()[2];
+	origin[2] = sin_theta * r.origin()[0] + cos_theta * r.origin()[2];
+	direction[0] = cos_theta * r.direction()[0] - sin_theta * r.direction()[2];
+	direction[2] = sin_theta * r.direction()[0] + cos_theta * r.direction()[2];
+	ray rotated_r(origin, direction, r.time());
+	if (ptr->hit(rotated_r, t_min, t_max, rec))
+	{
+		vec3 p = rec.p;
+		vec3 normal = rec.normal;
+		p[0] = cos_theta * rec.p[0] + sin_theta * rec.p[2];
+		p[2] = -sin_theta * rec.p[0] + cos_theta * rec.p[2];
+		normal[0] = cos_theta * rec.normal[0] + sin_theta * rec.normal[2];
+		normal[2] = -sin_theta * rec.normal[0] + cos_theta * rec.normal[2];
+		rec.p = p;
+		rec.normal = normal;
+		return true;
+	}
+	else
+		return false;
+}
+```
+
+由此构建出真正的康奈尔盒（把原来的两个盒子的参数设置如下）
+
+```cpp
+list[i++] = new translate(new rotate_y(new box(vec3(0, 0, 0), vec3(165, 165, 165), white), -18), vec3(130, 0, 65));
+list[i++] = new translate(new rotate_y(new box(vec3(0, 0, 0), vec3(165, 330, 165), white), 15), vec3(265, 0, 295));
+```

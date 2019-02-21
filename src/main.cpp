@@ -16,6 +16,7 @@
 #include "image_texture.h"
 #include "aa_rect.h"
 #include "hitable.h"
+#include "box.h"
 
 //depth：进行多少次光线追踪
 vec3 color(const ray &r, hitable *world, int depth)
@@ -114,7 +115,7 @@ hitable *simple_light()
 
 hitable *cornell_box()
 {
-	hitable **list = new hitable *[6];
+	hitable **list = new hitable *[8];
 	int i = 0;
 	material *red = new lambertian(new constant_texture(vec3(0.65, 0.05, 0.05)));
 	material *white = new lambertian(new constant_texture(vec3(0.73, 0.73, 0.73)));
@@ -126,6 +127,8 @@ hitable *cornell_box()
 	list[i++] = new flip_normals(new xz_rect(0, 555, 0, 555, 555, white));
 	list[i++] = new xz_rect(0, 555, 0, 555, 0, white);
 	list[i++] = new flip_normals(new xy_rect(0, 555, 0, 555, 555, white));
+	list[i++] = new translate(new rotate_y(new box(vec3(0, 0, 0), vec3(165, 165, 165), white), -18), vec3(130, 0, 65));
+	list[i++] = new translate(new rotate_y(new box(vec3(0, 0, 0), vec3(165, 330, 165), white), 15), vec3(265, 0, 295));
 	return new hitable_list(list, i);
 }
 
@@ -134,9 +137,9 @@ int main(int argc, char* argv[])
 	//画面是200*100
 	int nx = 400;
 	int ny = 200;
-	int ns = 1000;//对一个像素点重复采样进行抗锯齿
+	int ns = 100;//对一个像素点重复采样进行抗锯齿
 	std::ofstream file;
-	file.open("../output/Part2/emit3.ppm");
+	file.open("../output/Part2/instance2.ppm");
 
 	file << "P3\n" << nx << " " << ny << "\n255\n";
 
