@@ -9,3 +9,7 @@
 因为Apple将MacBook的OpenGL版本锁定在了4.1，而且在2018 WWDC中表示要抛弃OpenGL，全力推Metal，也就是说暂时我们是不能使用Mac平台进行基于OpenGL的GPU光线追踪了，为此我特地开了这个文件夹存储在Windows下的代码
 
 有时间我会想想办法转移到片元着色器中进行处理
+
+这份代码基于Visual Studio 2019 Preview 4.1 SVC1，已经基本完成目标要求
+
+![image](https://github.com/yu-cao/RayTrace/blob/master/RayGL_Win/RayGL_Win/rayGL.gif)
