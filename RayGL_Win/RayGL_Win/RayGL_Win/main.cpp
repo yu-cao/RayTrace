@@ -8,9 +8,10 @@
 #include <random>
 #include <iomanip>
 
-const float rad2deg = 180.0f / 3.1415926535f;//»¡¶È->½Ç¶È
+const float rad2deg = 180.0f / 3.1415926535f;//ï¿½ï¿½ï¿½ï¿½->ï¿½Ç¶ï¿½
 
-int main() {
+int main()
+{
 	GLFWwindow* window = nullptr;
 
 	const int WIDTH = 1920;
@@ -47,7 +48,7 @@ int main() {
 	Shader<ShaderType::COMPUTE> compshdr("compute.comp");
 	Shader<ShaderType::RENDER> drawshdr("vertex.vert", "fragment.frag");
 
-	//Ê¹ÓÃÒ»¸ö¼òµ¥µÄÕý·½ÐÎ×÷ÎªäÖÈ¾
+	//Ê¹ï¿½ï¿½Ò»ï¿½ï¿½ï¿½òµ¥µï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½È¾
 	float quad[] = {
 		-1.0f, -1.0f, 0.0f,
 		-1.0f,  1.0f, 0.0f,
@@ -64,7 +65,7 @@ int main() {
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	//´´½¨Ò»¸öÎÆÀí¶ÔÓÚ¹âÏß×·×ÙµÄÊä³ö½øÐÐ´æ´¢
+	//ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú¹ï¿½ï¿½ï¿½×·ï¿½Ùµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð´æ´¢
 	const int TEX_W = WIDTH, TEX_H = HEIGHT;
 	unsigned int tex_output;
 	glGenTextures(1, &tex_output);
@@ -76,7 +77,7 @@ int main() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEX_W, TEX_H, 0, GL_RGBA, GL_FLOAT, NULL);
 
-	//°ÑÒ»¸öÎÆÀíÖÐµÄÒ»¸ölevel°ó¶¨µ½Í¼Ïñµ¥ÔªÖÐ
+	//ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ðµï¿½Ò»ï¿½ï¿½levelï¿½ó¶¨µï¿½Í¼ï¿½ï¿½Ôªï¿½ï¿½
 	glBindImageTexture(0, tex_output, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
 	// SSBO for random engine
@@ -96,7 +97,7 @@ int main() {
 	glBufferData(GL_SHADER_STORAGE_BUFFER, init_rng.size() * sizeof(unsigned int), init_rng.data(), GL_STATIC_DRAW);
 
 	std::vector<Shape> obj{
-		//ÎåÃæÇ½
+		//ï¿½ï¿½ï¿½ï¿½Ç½
 		(Rect(glm::vec3{-3,-3,-2}, glm::vec3(6,6,0), glm::vec3(0.73f), 1.0f, MaterialType::LAMBERTIAN)),
 		(Rect(glm::vec3(-3,-3,-2), glm::vec3(0,6,6), glm::vec3(0.65f, 0.05f, 0.05f), 1.0f, MaterialType::LAMBERTIAN)),
 		(Rect(glm::vec3(3,-3,-2), glm::vec3(0,6,6), glm::vec3(0.12f, 0.45f, 0.15f), 1.0f, MaterialType::LAMBERTIAN, -1.0f)),
@@ -128,7 +129,7 @@ int main() {
 
 	double prev = start;
 	while (!glfwWindowShouldClose(window)) {
-		//¼ÆËãShaderµÄµ÷¶È£¬Ë³Ðò¼ÆËãÎª×óÏÂ->ÓÒÏÂ->×óÉÏ->ÓÒÉÏ
+		//ï¿½ï¿½ï¿½ï¿½Shaderï¿½Äµï¿½ï¿½È£ï¿½Ë³ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½->ï¿½ï¿½ï¿½ï¿½->ï¿½ï¿½ï¿½ï¿½->ï¿½ï¿½ï¿½ï¿½
 		int chunk_x, chunk_y;
 		chunk_x = iteration % CHUNKS_X;
 		chunk_y = (iteration / CHUNKS_X) % CHUNKS_Y;
@@ -156,7 +157,7 @@ int main() {
 
 		glfwSwapBuffers(window);
 
-		//Ã¿µ±äÖÈ¾Íê³ÉÕûÕûÒ»·ù»­Ãæ
+		//Ã¿ï¿½ï¿½ï¿½ï¿½È¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		if (iteration % N_CHUNKS == 0)
 		{
 			double time = glfwGetTime();

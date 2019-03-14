@@ -6,6 +6,7 @@ uniform sampler2D tex;
 
 out vec4 fragColor;
 
-void main() {
+void main()
+{
 	fragColor = texture(tex,texCoord);
 }
