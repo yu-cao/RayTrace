@@ -73,7 +73,6 @@ uniform struct Camera
 } cam;
 
 uniform int iteration;
-uniform float time;
 uniform ivec2 chunk;
 uniform bool skybox_active;
 

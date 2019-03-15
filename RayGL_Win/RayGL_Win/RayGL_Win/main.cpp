@@ -8,7 +8,7 @@
 #include <random>
 #include <iomanip>
 
-const float rad2deg = 180.0f / 3.1415926535f;//����->�Ƕ�
+const float rad2deg = 180.0f / 3.1415926535f;
 
 int main()
 {
@@ -31,14 +31,14 @@ int main()
 #endif
 
 	window = glfwCreateWindow(WIDTH, HEIGHT, "RayGL", nullptr, nullptr);
-	if (!window) 
+	if (!window)
 	{
 		std::cout << "Failed to create window" << std::endl;
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
 
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) 
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		return -1;
@@ -48,7 +48,6 @@ int main()
 	Shader<ShaderType::COMPUTE> compshdr("compute.comp");
 	Shader<ShaderType::RENDER> drawshdr("vertex.vert", "fragment.frag");
 
-	//ʹ��һ���򵥵���������Ϊ��Ⱦ
 	float quad[] = {
 		-1.0f, -1.0f, 0.0f,
 		-1.0f,  1.0f, 0.0f,
@@ -65,7 +64,7 @@ int main()
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	//����һ���������ڹ���׷�ٵ�������д洢
+	//Generate the Texture storing the raytracer output
 	const int TEX_W = WIDTH, TEX_H = HEIGHT;
 	unsigned int tex_output;
 	glGenTextures(1, &tex_output);
@@ -77,18 +76,16 @@ int main()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEX_W, TEX_H, 0, GL_RGBA, GL_FLOAT, NULL);
 
-	//��һ�������е�һ��level�󶨵�ͼ��Ԫ��
 	glBindImageTexture(0, tex_output, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
 	// SSBO for random engine
+	// the each pixel store a random number
 	std::default_random_engine rng;
 	std::uniform_int_distribution<uint32_t> distr;
 	std::vector<unsigned int> init_rng(WIDTH * HEIGHT);
-	for (int i = 0; i < WIDTH; i++) {
-		for (int j = 0; j < HEIGHT; j++) {
+	for (int i = 0; i < WIDTH; i++)
+		for (int j = 0; j < HEIGHT; j++)
 			init_rng[j * WIDTH + i] = distr(rng);
-		}
-	}
 
 	compshdr.use();
 	unsigned int SSBO_rng;
@@ -96,8 +93,9 @@ int main()
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, SSBO_rng);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, init_rng.size() * sizeof(unsigned int), init_rng.data(), GL_STATIC_DRAW);
 
+	//The object store the list of Sphere and trans data to the shader
 	std::vector<Shape> obj{
-		//����ǽ
+		//5wall, 1 Cube and 1 Sphere
 		(Rect(glm::vec3{-3,-3,-2}, glm::vec3(6,6,0), glm::vec3(0.73f), 1.0f, MaterialType::LAMBERTIAN)),
 		(Rect(glm::vec3(-3,-3,-2), glm::vec3(0,6,6), glm::vec3(0.65f, 0.05f, 0.05f), 1.0f, MaterialType::LAMBERTIAN)),
 		(Rect(glm::vec3(3,-3,-2), glm::vec3(0,6,6), glm::vec3(0.12f, 0.45f, 0.15f), 1.0f, MaterialType::LAMBERTIAN, -1.0f)),
@@ -109,7 +107,7 @@ int main()
 	};
 
 	compshdr.use();
-	GLuint SSBO_objects;
+	unsigned int SSBO_objects;
 	glGenBuffers(1, &SSBO_objects);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, SSBO_objects);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, obj.size() * sizeof(Sphere), obj.data(), GL_STATIC_DRAW);
@@ -129,26 +127,21 @@ int main()
 
 	double prev = start;
 	while (!glfwWindowShouldClose(window)) {
-		//����Shader�ĵ��ȣ�˳�����Ϊ����->����->����->����
+		//draw the picture following the left_bottom -> right_bottom -> left_top -> right-top
 		int chunk_x, chunk_y;
 		chunk_x = iteration % CHUNKS_X;
 		chunk_y = (iteration / CHUNKS_X) % CHUNKS_Y;
 
 		compshdr.use();
 		compshdr.setInt("iteration", (iteration++ / N_CHUNKS));
-		compshdr.setFloat("time", static_cast<float>(glfwGetTime()));
 		compshdr.setVector("chunk", glm::ivec2(chunk_x * CHUNK_W, chunk_y * CHUNK_H));
 		glDispatchCompute(static_cast<unsigned int>(TEX_W / CHUNKS_X), static_cast<unsigned int>(TEX_H / CHUNKS_Y), 1);
 
 		glfwPollEvents();
 		if (glfwGetKey(window, GLFW_KEY_SPACE) || glfwGetKey(window, GLFW_KEY_ESCAPE) || glfwGetKey(window, GLFW_KEY_ENTER))
-		{
 			glfwSetWindowShouldClose(window, GLFW_TRUE);
-			if (glfwGetKey(window, GLFW_KEY_ENTER)) 
-				wait_after_quit = true;
-		}
 
-		// Rendering Code
+		// Rendering the texture to screen
 		glClear(GL_COLOR_BUFFER_BIT);
 		drawshdr.use();
 		glBindVertexArray(VAO);
@@ -157,7 +150,6 @@ int main()
 
 		glfwSwapBuffers(window);
 
-		//ÿ����Ⱦ�������һ������
 		if (iteration % N_CHUNKS == 0)
 		{
 			double time = glfwGetTime();

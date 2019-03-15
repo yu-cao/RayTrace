@@ -264,9 +264,8 @@ public:
 	template <int N>
 	void setVector(const std::string& name, const glm::vec<N, float, glm::packed_highp>& vec)
 	{
-		if (glGetUniformLocation(ID, name.c_str()) < 0) {
+		if (glGetUniformLocation(ID, name.c_str()) < 0)
 			std::cout << "ERR::" << name << "_DOES_NOT_EXIST" << std::endl;
-		}
 		switch (N) {
 		case 2: {
 			glUniform2fv(glGetUniformLocation(ID, name.c_str()), 1, glm::value_ptr(vec));
