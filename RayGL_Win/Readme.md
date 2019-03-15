@@ -10,6 +10,6 @@
 
 有时间我会想想办法转移到片元着色器中进行处理
 
-这份代码基于Visual Studio 2019 Preview 4.1 SVC1，已经基本完成目标要求
+这份代码基于Visual Studio 2019 Preview 4.1 SVC1，已经基本完成目标要求，更加详细一点的讲述参考我在知乎上的文章：https://zhuanlan.zhihu.com/p/59291208
 
 ![image](https://github.com/yu-cao/RayTrace/blob/master/RayGL_Win/RayGL_Win/rayGL.gif)
